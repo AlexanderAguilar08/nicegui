@@ -66,4 +66,5 @@ with ui.column().classes(
             'color:white; font-size:20px'
         )
 
-ui.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+port = int(os.environ.get("PORT", 8080))
+ui.run(host="0.0.0.0", port=port, reload=False)
