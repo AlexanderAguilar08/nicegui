@@ -1,3 +1,4 @@
+import os
 from nicegui import ui
 
 def sumar():
