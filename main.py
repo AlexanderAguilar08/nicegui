@@ -1,20 +1,15 @@
 import os
 from dotenv import load_dotenv
 from nicegui import ui
-import ollama
+from openai import OpenAI
 
-# Cargar variables de entorno desde el archivo .env
 load_dotenv()
 
-MODELO = os.getenv('OLLAMA_MODEL', 'gemma4:31b-cloud')
-
-# Historial del chat con instrucción de personalidad inicial
-historial = [
-    {
-        'role': 'system',
-        'content': 'Eres un asistente escolar amable, conciso y divertido que ayuda a estudiantes a aprender programación.'
-    }
-]
+# Configurar el cliente usando la librería openai para Ollama Cloud
+client = OpenAI(
+    base_url='https://api.ollama.com/v1',
+    api_key='3979262d85ec4537836009107e7f98fe.OkUtwNmcrshRu8XDTPfQxz5M'
+)
 
 @ui.page('/')
 def main_page():
@@ -23,7 +18,6 @@ def main_page():
     # Contenedor del chat
     contenedor_chat = ui.column().classes('w-full border p-4 mb-4 h-80 overflow-y-auto rounded-lg shadow-sm')
 
-    # Mensaje de bienvenida inicial
     with contenedor_chat:
         ui.chat_message('¡Hola! :) Soy tu asistente de IA. ¿En qué te puedo ayudar hoy?', name='Asistente IA', stamp='Sistema')
 
@@ -32,38 +26,38 @@ def main_page():
         if not texto_usuario:
             return
 
-        # 1. Mostrar mensaje del usuario en pantalla
+        # 1. Mostrar mensaje del usuario
         with contenedor_chat:
             ui.chat_message(texto_usuario, name='Tú', sent=True)
         
-        # Guardar en el historial
-        historial.append({'role': 'user', 'content': texto_usuario})
         entrada.value = ''
 
-        # 2. Consultar a Ollama Cloud
-        try:
-            respuesta = ollama.chat(
-                model=MODELO,
-                messages=historial
-            )
-            texto_respuesta = respuesta['message']['content']
+        # 2. Definir personalidad (Reto Final) y mensaje del usuario
+        messages = [
+            {'role': 'system', 'content': 'Responde como un profesor amable de programación.'},
+            {'role': 'user', 'content': texto_usuario},
+        ]
 
-            # Mostrar respuesta de la IA en pantalla
+        # 3. Consultar a Ollama Cloud con la librería openai
+        try:
+            respuesta = client.chat.completions.create(
+                model='gemma4:31b',
+                messages=messages
+            )
+            texto_respuesta = respuesta.choices[0].message.content
+
+            # Mostrar respuesta de la IA
             with contenedor_chat:
                 ui.chat_message(texto_respuesta, name='Asistente IA')
-
-            # Guardar respuesta en el historial
-            historial.append({'role': 'assistant', 'content': texto_respuesta})
 
         except Exception as e:
             with contenedor_chat:
                 ui.chat_message(f'Error al conectar con la IA: {str(e)}', name='Sistema')
 
-    # Campo de entrada y botón de enviar
+    # Campo de entrada y botón
     with ui.row().classes('w-full items-center gap-2'):
         entrada = ui.input(placeholder='Escribe tu pregunta aquí...').classes('flex-1').on('keydown.enter', enviar_mensaje)
         ui.button('Enviar', on_click=enviar_mensaje).props('color=primary')
 
 # Ejecutar aplicación
-puerto = int(os.getenv('NICEGUI_PORT', 8080))
-ui.run(port=puerto)
+ui.run(port=8080)
