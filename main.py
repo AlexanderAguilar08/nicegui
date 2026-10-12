@@ -1,47 +1,69 @@
+import os
+from dotenv import load_dotenv
 from nicegui import ui
+import ollama
 
-encendido = False
+# Cargar variables de entorno desde el archivo .env
+load_dotenv()
 
-def cambiar_estado():
-    global encendido
-    encendido = not encendido
+MODELO = os.getenv('OLLAMA_MODEL', 'gemma4:31b-cloud')
+
+# Historial del chat con instrucción de personalidad inicial
+historial = [
+    {
+        'role': 'system',
+        'content': 'Eres un asistente escolar amable, conciso y divertido que ayuda a estudiantes a aprender programación.'
+    }
+]
+
+@ui.page('/')
+def main_page():
+    ui.label('🤖 Chatbot con Inteligencia Artificial').classes('text-2xl font-bold mb-4 text-primary')
     
-    if encendido:
-        estado.text = "Sistema: ACTIVO 🚀"
-        estado.style('color: #00ffca; font-size: 26px; font-weight: bold')
-        boton.set_text('Desactivar')
-        boton.props('color=purple')
-    else:
-        estado.text = "Sistema: INACTIVO 💤"
-        estado.style('color: #ff0055; font-size: 26px; font-weight: bold')
-        boton.set_text('Activar')
-        boton.props('color=dark')
+    # Contenedor del chat
+    contenedor_chat = ui.column().classes('w-full border p-4 mb-4 h-80 overflow-y-auto rounded-lg shadow-sm')
 
-with ui.column().classes('w-full h-screen items-center justify-center'):
-    # Tarjeta personalizada con color de fondo y sombra diferente
-    with ui.card().style(
-        'width:320px; background-color:#1e1e2e; color:white; border-radius:15px;'
-    ).classes('items-center p-5'):
+    # Mensaje de bienvenida inicial
+    with contenedor_chat:
+        ui.chat_message('¡Hola! :) Soy tu asistente de IA. ¿En qué te puedo ayudar hoy?', name='Asistente IA', stamp='Sistema')
 
-        ui.label('Control de Estado').style(
-            'font-size: 26px; font-weight: bold'
-        )
+    async def enviar_mensaje():
+        texto_usuario = entrada.value.strip()
+        if not texto_usuario:
+            return
 
-        ui.image(
-            'nice.png'
-        ).style('width:230px')
+        # 1. Mostrar mensaje del usuario en pantalla
+        with contenedor_chat:
+            ui.chat_message(texto_usuario, name='Tú', sent=True)
+        
+        # Guardar en el historial
+        historial.append({'role': 'user', 'content': texto_usuario})
+        entrada.value = ''
 
-        estado = ui.label(
-            "Sistema: INACTIVO 💤"
-        ).style(
-            'color: #ff0055; font-size: 26px; font-weight: bold'
-        )
+        # 2. Consultar a Ollama Cloud
+        try:
+            respuesta = ollama.chat(
+                model=MODELO,
+                messages=historial
+            )
+            texto_respuesta = respuesta['message']['content']
 
-        boton = ui.button(
-            'Activar',
-            icon='power_settings_new',
-            color='dark',
-            on_click=cambiar_estado
-        ).style('color: white')
+            # Mostrar respuesta de la IA en pantalla
+            with contenedor_chat:
+                ui.chat_message(texto_respuesta, name='Asistente IA')
 
-ui.run()
+            # Guardar respuesta en el historial
+            historial.append({'role': 'assistant', 'content': texto_respuesta})
+
+        except Exception as e:
+            with contenedor_chat:
+                ui.chat_message(f'Error al conectar con la IA: {str(e)}', name='Sistema')
+
+    # Campo de entrada y botón de enviar
+    with ui.row().classes('w-full items-center gap-2'):
+        entrada = ui.input(placeholder='Escribe tu pregunta aquí...').classes('flex-1').on('keydown.enter', enviar_mensaje)
+        ui.button('Enviar', on_click=enviar_mensaje).props('color=primary')
+
+# Ejecutar aplicación
+puerto = int(os.getenv('NICEGUI_PORT', 8080))
+ui.run(port=puerto)
