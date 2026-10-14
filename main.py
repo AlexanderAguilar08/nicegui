@@ -8,7 +8,7 @@ load_dotenv()
 # Configurar el cliente usando la librería openai para Ollama Cloud
 client = OpenAI(
     base_url='https://api.ollama.com/v1',
-    api_key='3979262d85ec4537836009107e7f98fe.OkUtwNmcrshRu8XDTPfQxz5M'
+    api_key=os.getenv('OLLAMA_API_KEY')
 )
 
 @ui.page('/')
