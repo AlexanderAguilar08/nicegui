@@ -1,15 +1,19 @@
 import os
 from dotenv import load_dotenv
 from nicegui import ui
-from openai import OpenAI
+import ollama
 
 load_dotenv()
 
-# Configurar el cliente usando la librería openai para Ollama Cloud
-client = OpenAI(
-    base_url='https://api.ollama.com/v1',
-    api_key=os.getenv('OLLAMA_API_KEY')
-)
+MODELO = os.getenv('OLLAMA_MODEL', 'gemma4:31b-cloud')
+
+# Historial con la personalidad del Reto Final
+historial = [
+    {
+        'role': 'system',
+        'content': 'Responde como un profesor amable de programación.'
+    }
+]
 
 @ui.page('/')
 def main_page():
@@ -30,25 +34,22 @@ def main_page():
         with contenedor_chat:
             ui.chat_message(texto_usuario, name='Tú', sent=True)
         
+        historial.append({'role': 'user', 'content': texto_usuario})
         entrada.value = ''
 
-        # 2. Definir personalidad (Reto Final) y mensaje del usuario
-        messages = [
-            {'role': 'system', 'content': 'Responde como un profesor amable de programación.'},
-            {'role': 'user', 'content': texto_usuario},
-        ]
-
-        # 3. Consultar a Ollama Cloud con la librería openai
+        # 2. Consultar a Ollama Cloud usando su librería oficial
         try:
-            respuesta = client.chat.completions.create(
-                model='gemma4:31b',
-                messages=messages
+            respuesta = ollama.chat(
+                model=MODELO,
+                messages=historial
             )
-            texto_respuesta = respuesta.choices[0].message.content
+            texto_respuesta = respuesta['message']['content']
 
             # Mostrar respuesta de la IA
             with contenedor_chat:
                 ui.chat_message(texto_respuesta, name='Asistente IA')
+
+            historial.append({'role': 'assistant', 'content': texto_respuesta})
 
         except Exception as e:
             with contenedor_chat:
@@ -59,5 +60,6 @@ def main_page():
         entrada = ui.input(placeholder='Escribe tu pregunta aquí...').classes('flex-1').on('keydown.enter', enviar_mensaje)
         ui.button('Enviar', on_click=enviar_mensaje).props('color=primary')
 
-# Ejecutar aplicación
-ui.run(port=8080)
+# Ejecutar aplicación adaptada para Render y local
+puerto = int(os.getenv('PORT', 8080))
+ui.run(port=puerto, host='0.0.0.0', storage_secret='secret')
