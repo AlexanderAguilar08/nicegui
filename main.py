@@ -5,10 +5,13 @@ import ollama
 
 load_dotenv()
 
-# Usar el modelo indicado por tu práctica
+# Forzar a la librería de ollama a usar la nube y leer la llave de entorno
+os.environ['OLLAMA_HOST'] = 'https://api.ollama.com' # O la ruta de la API en la nube configurada
+# La librería toma automáticamente la variable OLLAMA_API_KEY que ya pusiste en Render.
+
 MODELO = os.getenv('OLLAMA_MODEL', 'gemma4:31b-cloud')
 
-# Historial inicial con la personalidad del Reto Final
+# Historial con la personalidad del Reto Final
 historial = [
     {
         'role': 'system',
