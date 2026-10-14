@@ -1,15 +1,20 @@
 import os
 from dotenv import load_dotenv
 from nicegui import ui
-from openai import OpenAI
+import ollama
 
 load_dotenv()
 
-# Configurar el cliente para conectar con Ollama Cloud usando la variable de entorno
-client = OpenAI(
-    base_url='https://api.ollama.com/v1',
-    api_key=os.getenv('OLLAMA_API_KEY')
-)
+# Usar el modelo indicado por tu práctica
+MODELO = os.getenv('OLLAMA_MODEL', 'gemma4:31b-cloud')
+
+# Historial inicial con la personalidad del Reto Final
+historial = [
+    {
+        'role': 'system',
+        'content': 'Responde como un profesor amable de programación.'
+    }
+]
 
 @ui.page('/')
 def main_page():
@@ -26,29 +31,26 @@ def main_page():
         if not texto_usuario:
             return
 
-        # 1. Mostrar mensaje del usuario
+        # 1. Mostrar mensaje del usuario en pantalla
         with contenedor_chat:
             ui.chat_message(texto_usuario, name='Tú', sent=True)
         
+        historial.append({'role': 'user', 'content': texto_usuario})
         entrada.value = ''
 
-        # 2. Definir personalidad de profesor de programación y mensaje del usuario
-        messages = [
-            {'role': 'system', 'content': 'Responde como un profesor amable de programación.'},
-            {'role': 'user', 'content': texto_usuario},
-        ]
-
-        # 3. Consultar a Ollama Cloud
+        # 2. Consultar utilizando la librería oficial de ollama
         try:
-            respuesta = client.chat.completions.create(
-                model='gemma4:31b',
-                messages=messages
+            respuesta = ollama.chat(
+                model=MODELO,
+                messages=historial
             )
-            texto_respuesta = respuesta.choices[0].message.content
+            texto_respuesta = respuesta['message']['content']
 
-            # Mostrar respuesta de la IA
+            # Mostrar respuesta de la IA en pantalla
             with contenedor_chat:
                 ui.chat_message(texto_respuesta, name='Asistente IA')
+
+            historial.append({'role': 'assistant', 'content': texto_respuesta})
 
         except Exception as e:
             with contenedor_chat:
