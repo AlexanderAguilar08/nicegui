@@ -8,8 +8,15 @@ from ollama import AsyncClient
 
 load_dotenv()
 
-MODELO = os.getenv('OLLAMA_MODEL', 'gpt-oss:120b-cloud')
-cliente_ollama = AsyncClient(host=os.getenv('OLLAMA_HOST', 'http://localhost:11434'))
+# Usar el modelo correcto y apuntar el host directamente a la nube
+MODELO = os.getenv('OLLAMA_MODEL', 'gemma4:31b-cloud')
+
+# Configuramos el cliente para que use la API en la nube y mande tu llave de autenticación
+cliente_ollama = AsyncClient(
+    host=os.getenv('OLLAMA_HOST', 'https://api.ollama.com'),
+    headers={'Authorization': f"Bearer {os.getenv('OLLAMA_API_KEY')}"}
+)
+
 ultima_respuesta = ''
 
 
