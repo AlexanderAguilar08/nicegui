@@ -1,69 +1,81 @@
+import json
 import os
+import re
+
 from dotenv import load_dotenv
 from nicegui import ui
-import ollama
+from ollama import AsyncClient
 
 load_dotenv()
 
-# Forzar a la librería de ollama a usar la nube y leer la llave de entorno
-os.environ['OLLAMA_HOST'] = 'https://api.ollama.com' # O la ruta de la API en la nube configurada
-# La librería toma automáticamente la variable OLLAMA_API_KEY que ya pusiste en Render.
+MODELO = os.getenv('OLLAMA_MODEL', 'gpt-oss:120b-cloud')
+cliente_ollama = AsyncClient(host=os.getenv('OLLAMA_HOST', 'http://localhost:11434'))
+ultima_respuesta = ''
 
-MODELO = os.getenv('OLLAMA_MODEL', 'gemma4:31b-cloud')
 
-# Historial con la personalidad del Reto Final
-historial = [
-    {
-        'role': 'system',
-        'content': 'Responde como un profesor amable de programación.'
-    }
-]
+def sin_markdown(texto: str) -> str:
+    """Quita el formato Markdown para que suene bien al leerlo."""
+    texto = re.sub(r'```.*?```', ' ', texto, flags=re.DOTALL)
+    texto = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', texto)
+    return re.sub(r'[`*_#>~-]', ' ', texto)
 
-@ui.page('/')
-def main_page():
-    ui.label('🤖 Chatbot con Inteligencia Artificial').classes('text-2xl font-bold mb-4 text-primary')
-    
-    # Contenedor del chat
-    contenedor_chat = ui.column().classes('w-full border p-4 mb-4 h-80 overflow-y-auto rounded-lg shadow-sm')
 
-    with contenedor_chat:
-        ui.chat_message('¡Hola! :) Soy tu asistente de IA. ¿En qué te puedo ayudar hoy?', name='Asistente IA', stamp='Sistema')
+async def leer() -> None:
+    """Lee la última respuesta con la voz del navegador."""
+    if not ultima_respuesta:
+        ui.notify('Todavía no hay respuesta para leer.', type='warning')
+        return
 
-    async def enviar_mensaje():
-        texto_usuario = entrada.value.strip()
-        if not texto_usuario:
-            return
+    await ui.run_javascript(f'''
+        if (!('speechSynthesis' in window)) return false;
+        speechSynthesis.cancel();
+        const mensaje = new SpeechSynthesisUtterance({json.dumps(sin_markdown(ultima_respuesta), ensure_ascii=False)});
+        mensaje.lang = 'es-MX';
+        speechSynthesis.speak(mensaje);
+        return true;
+    ''')
 
-        # 1. Mostrar mensaje del usuario en pantalla
-        with contenedor_chat:
-            ui.chat_message(texto_usuario, name='Tú', sent=True)
-        
-        historial.append({'role': 'user', 'content': texto_usuario})
-        entrada.value = ''
 
-        # 2. Consultar utilizando la librería oficial de ollama
-        try:
-            respuesta = ollama.chat(
-                model=MODELO,
-                messages=historial
-            )
-            texto_respuesta = respuesta['message']['content']
+async def detener() -> None:
+    """Detiene la lectura que esté reproduciendo el navegador."""
+    await ui.run_javascript('speechSynthesis?.cancel()')
 
-            # Mostrar respuesta de la IA en pantalla
-            with contenedor_chat:
-                ui.chat_message(texto_respuesta, name='Asistente IA')
 
-            historial.append({'role': 'assistant', 'content': texto_respuesta})
+async def enviar() -> None:
+    """Envía la pregunta a Ollama y muestra la respuesta en la interfaz."""
+    global ultima_respuesta
 
-        except Exception as e:
-            with contenedor_chat:
-                ui.chat_message(f'Error al conectar con la IA: {str(e)}', name='Sistema')
+    texto = (entrada.value or '').strip()
+    if not texto:
+        ui.notify('Escribe una pregunta antes de enviarla.', type='warning')
+        return
 
-    # Campo de entrada y botón
-    with ui.row().classes('w-full items-center gap-2'):
-        entrada = ui.input(placeholder='Escribe tu pregunta aquí...').classes('flex-1').on('keydown.enter', enviar_mensaje)
-        ui.button('Enviar', on_click=enviar_mensaje).props('color=primary')
+    boton.disable()
+    resultado.set_content('⏳ Pensando...')
+    try:
+        respuesta = await cliente_ollama.chat(
+            model=MODELO,
+            messages=[{'role': 'user', 'content': texto}],
+        )
+        ultima_respuesta = respuesta.message.content or '(El modelo no devolvió texto)'
+        resultado.set_content(ultima_respuesta)
+        entrada.set_value('')
+    except Exception as error:
+        resultado.set_content(f'❌ Error: {error}')
+    finally:
+        boton.enable()
 
-# Ejecutar aplicación compatible con Render y local
-puerto = int(os.getenv('PORT', 8080))
-ui.run(port=puerto, host='0.0.0.0', storage_secret='secret')
+
+with ui.card().classes('w-full max-w-2xl mx-auto mt-8'):
+    ui.label('🤖 Mi primer chatbot').classes('text-xl font-bold')
+    entrada = ui.input(placeholder='Escribe algo').classes('w-full')
+    with ui.row():
+        boton = ui.button('Enviar', on_click=enviar, icon='send')
+        ui.button('Leer respuesta', on_click=leer, icon='volume_up')
+        ui.button('Detener', on_click=detener, icon='stop')
+    entrada.on('keydown.enter', enviar)
+    resultado = ui.markdown('').classes('w-full whitespace-pre-wrap')
+
+
+puerto = int(os.getenv('PORT', os.getenv('NICEGUI_PORT', '8080')))
+ui.run(title='Mi primer chatbot', port=puerto, host='0.0.0.0', storage_secret='secret')
