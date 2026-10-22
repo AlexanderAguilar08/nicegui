@@ -1,4 +1,5 @@
-from nicegui import ui; import os
+import os
+from nicegui import ui
 
 datos = []
 
